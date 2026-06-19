@@ -777,6 +777,12 @@ function buildPgeNotationContext() {
     }).join("\n");
 }
 
+function buildPgeCriterionOutputList() {
+    return pgeNotationCriteria
+        .map((critere) => "- " + critere.label + " : [fourchette estimée]/10 - [justification courte fondée sur les commentaires]")
+        .join("\n");
+}
+
 function buildProgrammePromptContext() {
     const programmeContext = programmes[state.programme].promptContext;
     if (state.programme !== "pge") return programmeContext;
@@ -785,7 +791,11 @@ function buildProgrammePromptContext() {
 
 function buildRubricInstruction() {
     if (state.programme !== "pge") return "";
-    return "- Pour le PGE, ne suppose pas que le jury a déjà complété la notation PGE : estime toi-même une fourchette de note /10 à partir des commentaires des Critères généraux et de l'Épreuve du révélateur, en t'appuyant sur la grille de notation PGE fournie.\n- Pour le PGE, fais apparaître explicitement la mention \"Fourchette estimée PGE : X-Y/10\". Si les commentaires ne suffisent pas, indique \"Fourchette estimée PGE : non estimable\" et explique brièvement pourquoi.\n";
+    return "- Pour le PGE, ne suppose pas que le jury a déjà complété la notation PGE : c'est toi qui dois estimer les fourchettes à partir des commentaires des Critères généraux et de l'Épreuve du révélateur, en t'appuyant sur la grille de notation PGE fournie.\n"
+        + "- Pour le PGE, rends obligatoirement deux blocs : d'abord \"Appréciation\" en 2 à 3 lignes, puis \"Notation PGE estimée\".\n"
+        + "- Dans \"Notation PGE estimée\", donne une ligne pour chacun des critères ci-dessous, exactement dans cet ordre. Chaque ligne doit contenir une fourchette /10 et une justification courte. Si les commentaires ne suffisent pas pour un critère, écris \"non estimable\" pour ce critère et explique brièvement pourquoi.\n"
+        + buildPgeCriterionOutputList() + "\n"
+        + "- Termine la notation PGE par \"Fourchette globale estimée PGE : X-Y/10\" ou \"Fourchette globale estimée PGE : non estimable\".\n";
 }
 
 function buildPrompt() {
@@ -796,8 +806,8 @@ Consignes impératives :
 - Interdiction absolue de faire la promotion de l'école.
 - Base-toi uniquement sur les informations saisies dans la grille et sur le contexte d'évaluation fourni.
 ${buildRubricInstruction()}- N'invente pas d'éléments non renseignés. Si une dimension est absente, n'en parle pas.
-- Si l'évaluation globale est très bonne, limite-toi à 2 lignes maximum.
-- Si le candidat présente des notes insuffisantes ou moyennes, étends la synthèse jusqu'à 3 lignes maximum pour justifier ses lacunes de façon détaillée.
+- Pour Bachelor et IBBA / EBP, si l'évaluation globale est très bonne, limite-toi à 2 lignes maximum.
+- Pour Bachelor et IBBA / EBP, si le candidat présente des notes insuffisantes ou moyennes, étends la synthèse jusqu'à 3 lignes maximum pour justifier ses lacunes de façon détaillée.
 Contexte du programme : ${buildProgrammePromptContext()}
 Nom : ${state.candidateName || "Non renseigné"}
 Origine : ${state.candidateOrigin || "Non renseignée"}
