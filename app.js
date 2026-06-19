@@ -522,49 +522,26 @@ function getPgeScoreStats() {
 }
 
 function getPgeScoreSummary() {
-    const stats = getPgeScoreStats();
-    if (!stats.scored) return "0/" + stats.expected + " notés";
-    return stats.total + "/" + stats.maxTotal + " · moyenne " + stats.average.toFixed(1) + "/10 · " + stats.scored + "/" + stats.expected + " notés";
-}
-
-function renderScoreOptions(savedScore) {
-    let html = '<option value="">Non noté</option>';
-    for (let score = 1; score <= 10; score += 1) {
-        html += '<option value="' + score + '" ' + (String(savedScore) === String(score) ? 'selected' : '') + '>' + score + '/10</option>';
-    }
-    return html;
+    return "Fourchette estimée par l'IA";
 }
 
 function renderRubricLevels(critere) {
-    return critere.levels.map((level) => '<li><strong>' + level.range + '</strong> ' + escapeHtml(level.description) + '</li>').join('');
+    return critere.levels.map((level) => `
+        <div class="score-level">
+            <strong>${escapeHtml(level.range)}/10</strong>
+            <span>${escapeHtml(level.description)}</span>
+        </div>
+    `).join("");
 }
 
 function renderNotationRow(critere, index) {
-    const saved = getEvaluation("score", index);
-    const scoreId = "score-" + index;
-    const commentId = "score-comment-" + index;
-    const selectedLevel = getNotationLevel(critere, saved.score);
-    const scoreState = saved.score ? "score-" + saved.score : "score-empty";
-
-    return `<div class="score-row" data-score="${scoreState}">
+    return `<div class="score-row" data-score-reference="${index}">
             <div class="score-topic">
                 <h3>${escapeHtml(critere.label)}</h3>
                 ${critere.objective ? `<p>${escapeHtml(critere.objective)}</p>` : ""}
-                <details>
-                    <summary>Repères de notation</summary>
-                    <ul>${renderRubricLevels(critere)}</ul>
-                </details>
             </div>
-            <div class="field">
-                <label for="${scoreId}">Note /10</label>
-                <select id="${scoreId}" data-eval-type="score" data-eval-index="${index}" data-eval-field="score">
-                    ${renderScoreOptions(saved.score)}
-                </select>
-                <p class="score-description">${selectedLevel ? selectedLevel.range + " - " + escapeHtml(selectedLevel.description) : "Choisir une note pour afficher le repère."}</p>
-            </div>
-            <div class="field">
-                <label for="${commentId}">Justification</label>
-                <input type="text" id="${commentId}" value="${escapeHtml(saved.comment)}" data-eval-type="score" data-eval-index="${index}" data-eval-field="comment" placeholder="Indice observé pendant l'entretien">
+            <div class="score-levels" aria-label="Repères ${escapeHtml(critere.label)}">
+                ${renderRubricLevels(critere)}
             </div>
         </div>`;
 }
@@ -575,7 +552,7 @@ function renderPgeNotation() {
                 <h2 id="notation-title">Notation PGE</h2>
                 <p class="shortcut-hint" id="pge-score-summary">${getPgeScoreSummary()}</p>
             </div>
-            <p class="rubric-source">Base : Grille Evaluation Le Revelateur.docx. Cette notation est affichée uniquement pour le Programme grande école.</p>
+            <p class="rubric-source">Base : Grille Evaluation Le Revelateur.docx. Ces repères ne sont pas à compléter par le jury : l'IA estime une fourchette de notation à partir des commentaires saisis dans Critères généraux et Épreuve du révélateur.</p>
             <div class="score-list">
                 ${pgeNotationCriteria.map((critere, scoreIndex) => renderNotationRow(critere, scoreIndex)).join("")}
             </div>
@@ -780,18 +757,6 @@ function collectEvaluations() {
             if (item.note || item.comment) lines.push("- " + carte.nom + " : " + (item.note || "Non noté") + " / " + (item.comment || "Sans commentaire"));
         });
 
-        const stats = getPgeScoreStats();
-        if (stats.scored) lines.push("- Score PGE : " + stats.total + "/" + stats.maxTotal + ", moyenne " + stats.average.toFixed(1) + "/10 sur " + stats.scored + "/" + stats.expected + " critères notés");
-
-        pgeNotationCriteria.forEach((critere, index) => {
-            const item = getEvaluation("score", index);
-            const level = getNotationLevel(critere, item.score);
-            if (item.score || item.comment) {
-                const scoreText = item.score ? item.score + "/10" : "Non noté";
-                const levelText = level ? " (" + level.range + ")" : "";
-                lines.push("- Notation PGE - " + critere.label + " : " + scoreText + levelText + " / " + (item.comment || "Sans justification"));
-            }
-        });
     }
 
     return lines.join("\n");
@@ -813,7 +778,7 @@ function buildProgrammePromptContext() {
 
 function buildRubricInstruction() {
     if (state.programme !== "pge") return "";
-    return "- Pour le PGE, utilise la notation issue de Grille Evaluation Le Revelateur.docx comme signal prioritaire. Si des notes /10 sont renseignées, l'appréciation finale doit refléter le niveau mesuré et les justifications associées.\n";
+    return "- Pour le PGE, ne suppose pas que le jury a déjà complété la notation PGE : estime toi-même une fourchette de note /10 à partir des commentaires des Critères généraux et de l'Épreuve du révélateur, en t'appuyant sur la grille de notation PGE fournie.\n- Pour le PGE, fais apparaître explicitement la mention \"Fourchette estimée PGE : X-Y/10\". Si les commentaires ne suffisent pas, indique \"Fourchette estimée PGE : non estimable\" et explique brièvement pourquoi.\n";
 }
 
 function buildPrompt() {
