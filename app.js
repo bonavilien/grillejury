@@ -553,44 +553,6 @@ function getEvaluation(type, index) {
     return state.evaluations[evaluationKey(type, index)] || { note: "", score: "", comment: "" };
 }
 
-function getPgeScoreSummary() {
-    return "Repères consultables, estimation dans la synthèse";
-}
-
-function renderRubricLevels(critere) {
-    return critere.levels.map((level) => `
-        <li>
-            <strong>${escapeHtml(level.range)}/10</strong>
-            <span>${escapeHtml(level.description)}</span>
-        </li>
-    `).join("");
-}
-
-function renderNotationRow(critere, index) {
-    return `<details class="score-row" data-score-reference="${index}">
-            <summary>
-                <span>${escapeHtml(critere.label)}</span>
-                ${critere.objective ? `<small>${escapeHtml(critere.objective)}</small>` : ""}
-            </summary>
-            <ul class="score-levels">
-                ${renderRubricLevels(critere)}
-            </ul>
-        </details>`;
-}
-
-function renderPgeNotation() {
-    return `<section class="evaluation-section pge-notation" aria-labelledby="notation-title">
-            <div class="section-heading-row">
-                <h2 id="notation-title">Repères notation PGE</h2>
-                <p class="shortcut-hint" id="pge-score-summary">${getPgeScoreSummary()}</p>
-            </div>
-            <p class="rubric-source">Base : Grille Evaluation Le Revelateur.docx. À consulter seulement si besoin : la synthèse estime la fourchette à partir des commentaires saisis dans Critères généraux et Épreuve du révélateur.</p>
-            <div class="score-list">
-                ${pgeNotationCriteria.map((critere, scoreIndex) => renderNotationRow(critere, scoreIndex)).join("")}
-            </div>
-        </section>`;
-}
-
 function renderCriteriaRow(sujet, index, type, imgSrc = null) {
     const saved = getEvaluation(type, index);
     const selectId = `app-${type}-${index}`;
@@ -633,8 +595,6 @@ function updateProgressIndicators() {
     const revelateurProgress = document.getElementById("revelateur-progress");
     if (revelateurProgress) revelateurProgress.textContent = getProgress(criteresRevelateur, "rev");
 
-    const pgeScoreSummary = document.getElementById("pge-score-summary");
-    if (pgeScoreSummary) pgeScoreSummary.textContent = getPgeScoreSummary();
 }
 
 
