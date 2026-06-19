@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Grille d'évaluation jury 2026</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23320013'/%3E%3Cpath d='M18 18h28v6H18zm0 12h28v6H18zm0 12h18v6H18z' fill='%23ff5968'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#evaluation">Aller à l'évaluation</a>
+
+    <main class="app-shell">
+        <header class="main-header" aria-labelledby="page-title">
+            <div>
+                <p class="eyebrow">Jury d'admission</p>
+                <h1 id="page-title">Grille d'évaluation</h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn-secondary" type="button" id="theme-toggle" aria-pressed="false">
+                    <span aria-hidden="true">☾</span>
+                    <span>Mode sombre</span>
+                </button>
+                <a href="https://kedge.isadmission.com/login" target="_blank" rel="noreferrer" class="btn-secondary">
+                    Plateforme d'admission
+                </a>
+            </div>
+        </header>
+
+        <nav class="tabs" aria-label="Choix du concours" role="tablist">
+            <button id="tab-bachelor" class="tab-btn active" type="button" data-programme="bachelor" role="tab" aria-selected="true">Bachelor</button>
+            <button id="tab-ibba" class="tab-btn" type="button" data-programme="ibba" role="tab" aria-selected="false">IBBA / EBP</button>
+            <button id="tab-pge" class="tab-btn" type="button" data-programme="pge" role="tab" aria-selected="false">Programme grande école</button>
+        </nav>
+
+        <section class="notice" aria-labelledby="info-title">
+            <div>
+                <h2 id="info-title">Attendus</h2>
+                <p id="info-desc"></p>
+            </div>
+            <div id="info-links" class="link-list"></div>
+        </section>
+
+        <section class="tool-bar" aria-label="Outils de session">
+            <div class="chrono-wrapper" aria-label="Chronomètre">
+                <output id="chrono" aria-live="polite">00:00</output>
+                <button class="icon-btn" type="button" id="timer-start" aria-label="Démarrer le chronomètre">▶</button>
+                <button class="icon-btn" type="button" id="timer-pause" aria-label="Mettre le chronomètre en pause">⏸</button>
+                <button class="icon-btn" type="button" id="timer-reset" aria-label="Remettre le chronomètre à zéro">⟲</button>
+            </div>
+
+            <form class="api-controls" id="api-form" autocomplete="off">
+                <div class="field">
+                    <label for="api-key">Clé Google AI Studio</label>
+                    <input type="password" id="api-key" autocomplete="off" placeholder="Coller la clé API">
+                    <button class="text-btn" type="button" id="help-toggle" aria-expanded="false" aria-controls="api-help">
+                        Comment configurer ma clé API ?
+                    </button>
+                    <div class="help-panel" id="api-help" hidden>
+                        <ol>
+                            <li>Va sur Google AI Studio.</li>
+                            <li>Connecte-toi avec ton compte Google.</li>
+                            <li>Crée une clé API depuis la section dédiée.</li>
+                            <li>Colle la clé dans le champ ci-dessus.</li>
+                        </ol>
+                        <p>La clé n'est pas enregistrée par cette page. Elle est envoyée à Google uniquement lors de la génération.</p>
+                        <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer">Ouvrir Google AI Studio</a>
+                    </div>
+                </div>
+                <div class="field model-field">
+                    <label for="model-name">Modèle</label>
+                    <select id="model-name"></select>
+                </div>
+            </form>
+        </section>
+
+        <section class="candidate-card" aria-labelledby="candidate-title">
+            <div class="section-heading-row">
+                <h2 id="candidate-title">Candidat</h2>
+                <p class="save-state" id="save-state" role="status" aria-live="polite">Non enregistré</p>
+            </div>
+            <div class="candidate-grid">
+                <div class="field">
+                    <label for="candidate-name">Nom du candidat</label>
+                    <input type="text" id="candidate-name" autocomplete="name" placeholder="Prénom et nom">
+                </div>
+                <div class="field">
+                    <label for="candidate-origin">Originaire de</label>
+                    <input type="text" id="candidate-origin" placeholder="Ville ou région">
+                </div>
+            </div>
+        </section>
+
+        <div class="workbench">
+            <section id="evaluation" aria-live="polite"></section>
+
+            <section class="result-card" aria-labelledby="result-title">
+                <div class="result-header">
+                    <div>
+                        <p class="eyebrow">Sortie jury</p>
+                        <h2 id="result-title">Synthèse</h2>
+                    </div>
+                    <button class="btn-primary" type="button" id="generate-summary">Créer la synthèse</button>
+                </div>
+                <label class="sr-only" for="result">Appréciation finale</label>
+                <textarea id="result" placeholder="L'appréciation finale apparaîtra ici." readonly></textarea>
+                <p class="status-message" id="status-message" role="status" aria-live="polite"></p>
+                <div class="actions">
+                    <button class="btn-secondary" type="button" id="retry-summary" hidden>Réessayer</button>
+                    <button class="btn-secondary" type="button" id="next-candidate">Nouveau candidat</button>
+                    <button class="btn-danger" type="button" id="clear-form">Tout effacer</button>
+                </div>
+            </section>
+        </div>
+
+        <footer class="footer-signature">Made with care by Julien Bonavita</footer>
+    </main>
+
+    <script src="app.js" defer></script>
+</body>
+</html>
