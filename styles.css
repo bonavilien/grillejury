@@ -389,15 +389,14 @@ input:focus, select:focus, textarea:focus {
 }
 
 .card-icon {
-    width: 58px;
-    height: 58px;
-    aspect-ratio: 1 / 1;
+    width: auto;
+    height: 64px;
+    max-width: 96px;
     object-fit: contain;
     flex: 0 0 auto;
     border-radius: 0.35rem;
     border: 1px solid var(--border);
     background: var(--surface);
-    padding: 0.18rem;
 }
 
 .rubric-source {
