@@ -99,6 +99,7 @@
                     <div>
                         <p class="eyebrow">Sortie jury</p>
                         <h2 id="result-title">Synthèse</h2>
+                        <p class="generation-readiness" id="generation-readiness">Clé API requise pour générer.</p>
                     </div>
                     <button class="btn-primary" type="button" id="generate-summary">Créer la synthèse</button>
                 </div>
@@ -115,6 +116,17 @@
 
         <footer class="footer-signature">Made with care by Julien Bonavita</footer>
     </main>
+
+    <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title">
+        <form method="dialog">
+            <h2 id="confirm-title">Confirmer l'action</h2>
+            <p id="confirm-message"></p>
+            <div class="confirm-actions">
+                <button class="btn-secondary" type="button" id="confirm-cancel">Annuler</button>
+                <button class="btn-danger" type="button" id="confirm-accept">Confirmer</button>
+            </div>
+        </form>
+    </dialog>
 
     <script src="app.js" defer></script>
 </body>

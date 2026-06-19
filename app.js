@@ -422,6 +422,12 @@ function cacheElements() {
         generateSummary: document.getElementById("generate-summary"),
         retrySummary: document.getElementById("retry-summary"),
         nextCandidate: document.getElementById("next-candidate"),
+        generationReadiness: document.getElementById("generation-readiness"),
+        confirmDialog: document.getElementById("confirm-dialog"),
+        confirmTitle: document.getElementById("confirm-title"),
+        confirmMessage: document.getElementById("confirm-message"),
+        confirmCancel: document.getElementById("confirm-cancel"),
+        confirmAccept: document.getElementById("confirm-accept"),
         chrono: document.getElementById("chrono")
     });
 }
@@ -451,6 +457,48 @@ function saveState() {
 function setStatus(message, canRetry = false) {
     elements.status.textContent = message;
     elements.retrySummary.hidden = !canRetry;
+}
+
+function updateGenerationReadiness(isGenerating = false) {
+    if (!elements.generationReadiness || !elements.generateSummary) return;
+
+    const hasApiKey = Boolean(elements.apiKey.value.trim());
+    elements.generateSummary.disabled = isGenerating || !hasApiKey;
+    elements.generateSummary.textContent = isGenerating ? "Génération..." : "Créer la synthèse";
+    elements.generationReadiness.textContent = hasApiKey
+        ? "Prêt à générer avec la clé renseignée."
+        : "Clé API requise pour générer.";
+    elements.generationReadiness.dataset.state = isGenerating ? "loading" : hasApiKey ? "ready" : "missing";
+}
+
+function requestConfirmation({ title, message, acceptLabel = "Confirmer", danger = true }) {
+    return new Promise((resolve) => {
+        if (!elements.confirmDialog?.showModal) {
+            resolve(window.confirm(message));
+            return;
+        }
+
+        elements.confirmTitle.textContent = title;
+        elements.confirmMessage.textContent = message;
+        elements.confirmAccept.textContent = acceptLabel;
+        elements.confirmAccept.className = danger ? "btn-danger" : "btn-primary";
+
+        const cleanup = (result) => {
+            elements.confirmCancel.removeEventListener("click", onCancel);
+            elements.confirmAccept.removeEventListener("click", onAccept);
+            elements.confirmDialog.removeEventListener("cancel", onCancel);
+            if (elements.confirmDialog.open) elements.confirmDialog.close();
+            resolve(result);
+        };
+
+        const onCancel = () => cleanup(false);
+        const onAccept = () => cleanup(true);
+
+        elements.confirmCancel.addEventListener("click", onCancel, { once: true });
+        elements.confirmAccept.addEventListener("click", onAccept, { once: true });
+        elements.confirmDialog.addEventListener("cancel", onCancel, { once: true });
+        elements.confirmDialog.showModal();
+    });
 }
 
 function renderSaveState() {
@@ -505,54 +553,38 @@ function getEvaluation(type, index) {
     return state.evaluations[evaluationKey(type, index)] || { note: "", score: "", comment: "" };
 }
 
-function getNotationLevel(critere, score) {
-    const numericScore = Number(score);
-    if (!numericScore) return null;
-    return critere.levels.find((level) => numericScore >= level.min && numericScore <= level.max) || null;
-}
-
-function getPgeScoreStats() {
-    const scores = pgeNotationCriteria
-        .map((_, index) => Number(getEvaluation("score", index).score))
-        .filter(Boolean);
-    const total = scores.reduce((sum, score) => sum + score, 0);
-    const average = scores.length ? total / scores.length : 0;
-
-    return { average, scored: scores.length, total, maxTotal: pgeNotationCriteria.length * 10, expected: pgeNotationCriteria.length };
-}
-
 function getPgeScoreSummary() {
-    return "Fourchette estimée par l'IA";
+    return "Repères consultables, estimation dans la synthèse";
 }
 
 function renderRubricLevels(critere) {
     return critere.levels.map((level) => `
-        <div class="score-level">
+        <li>
             <strong>${escapeHtml(level.range)}/10</strong>
             <span>${escapeHtml(level.description)}</span>
-        </div>
+        </li>
     `).join("");
 }
 
 function renderNotationRow(critere, index) {
-    return `<div class="score-row" data-score-reference="${index}">
-            <div class="score-topic">
-                <h3>${escapeHtml(critere.label)}</h3>
-                ${critere.objective ? `<p>${escapeHtml(critere.objective)}</p>` : ""}
-            </div>
-            <div class="score-levels" aria-label="Repères ${escapeHtml(critere.label)}">
+    return `<details class="score-row" data-score-reference="${index}">
+            <summary>
+                <span>${escapeHtml(critere.label)}</span>
+                ${critere.objective ? `<small>${escapeHtml(critere.objective)}</small>` : ""}
+            </summary>
+            <ul class="score-levels">
                 ${renderRubricLevels(critere)}
-            </div>
-        </div>`;
+            </ul>
+        </details>`;
 }
 
 function renderPgeNotation() {
     return `<section class="evaluation-section pge-notation" aria-labelledby="notation-title">
             <div class="section-heading-row">
-                <h2 id="notation-title">Notation PGE</h2>
+                <h2 id="notation-title">Repères notation PGE</h2>
                 <p class="shortcut-hint" id="pge-score-summary">${getPgeScoreSummary()}</p>
             </div>
-            <p class="rubric-source">Base : Grille Evaluation Le Revelateur.docx. Ces repères ne sont pas à compléter par le jury : l'IA estime une fourchette de notation à partir des commentaires saisis dans Critères généraux et Épreuve du révélateur.</p>
+            <p class="rubric-source">Base : Grille Evaluation Le Revelateur.docx. À consulter seulement si besoin : la synthèse estime la fourchette à partir des commentaires saisis dans Critères généraux et Épreuve du révélateur.</p>
             <div class="score-list">
                 ${pgeNotationCriteria.map((critere, scoreIndex) => renderNotationRow(critere, scoreIndex)).join("")}
             </div>
@@ -595,7 +627,7 @@ function getProgress(criteria, type) {
 function updateProgressIndicators() {
     const baseProgress = document.getElementById("base-progress");
     if (baseProgress) {
-        baseProgress.textContent = `${getProgress(criteresBase, "base")} · Alt+1 Excellent, Alt+2 Bien, Alt+3 Moyen, Alt+4 Insuffisant`;
+        baseProgress.textContent = `${getProgress(criteresBase, "base")}`;
     }
 
     const revelateurProgress = document.getElementById("revelateur-progress");
@@ -633,8 +665,12 @@ function renderEvaluation() {
         <section class="evaluation-section" aria-labelledby="base-title">
             <div class="section-heading-row">
                 <h2 id="base-title">Critères généraux</h2>
-                <p class="shortcut-hint" id="base-progress">${getProgress(criteresBase, "base")} · Alt+1 Excellent, Alt+2 Bien, Alt+3 Moyen, Alt+4 Insuffisant</p>
+                <p class="shortcut-hint" id="base-progress">${getProgress(criteresBase, "base")}</p>
             </div>
+            <details class="shortcut-help">
+                <summary>Raccourcis clavier</summary>
+                <p>Alt+1 Excellent, Alt+2 Bien, Alt+3 Moyen, Alt+4 Insuffisant.</p>
+            </details>
             ${renderBaseGroups()}
         </section>
     `;
@@ -679,6 +715,7 @@ function render() {
     renderModelOptions();
     renderFormValues();
     renderSaveState();
+    updateGenerationReadiness();
 }
 
 function hasEnteredData() {
@@ -698,8 +735,12 @@ function resetCandidateData() {
     zeroChrono();
 }
 
-function startNextCandidate() {
-    const confirmed = !hasEnteredData() || confirm("Préparer un nouveau candidat ? Les saisies actuelles seront effacées.");
+async function startNextCandidate() {
+    const confirmed = !hasEnteredData() || await requestConfirmation({
+        title: "Nouveau candidat",
+        message: "Préparer un nouveau candidat effacera les notes, commentaires et la synthèse en cours.",
+        acceptLabel: "Préparer"
+    });
     if (!confirmed) return;
 
     resetCandidateData();
@@ -709,10 +750,17 @@ function startNextCandidate() {
     elements.candidateName.focus();
 }
 
-function switchProgramme(programme) {
+async function switchProgramme(programme) {
     if (!programmes[programme] || programme === state.programme) return;
 
-    if (hasEnteredData() && !confirm("Ce changement effacera les notes du candidat. Procéder ?")) return;
+    if (hasEnteredData()) {
+        const confirmed = await requestConfirmation({
+            title: "Changer de programme",
+            message: "Changer de programme effacera les notes, commentaires et la synthèse du candidat actuel.",
+            acceptLabel: "Changer"
+        });
+        if (!confirmed) return;
+    }
 
     resetCandidateData();
     state.programme = programme;
@@ -829,7 +877,8 @@ async function genererAppreciation() {
     const apiKey = elements.apiKey.value.trim();
 
     if (!apiKey) {
-        setStatus("La clé API est requise pour créer la synthèse.");
+        updateGenerationReadiness();
+        setStatus("Renseigne la clé API avant de créer la synthèse.");
         elements.apiKey.focus();
         return;
     }
@@ -837,7 +886,7 @@ async function genererAppreciation() {
     state.modelName = elements.modelName.value;
     state.result = "Analyse des critères et rédaction...";
     elements.result.value = state.result;
-    elements.generateSummary.disabled = true;
+    updateGenerationReadiness(true);
     setStatus("Génération en cours.");
 
     try {
@@ -864,7 +913,7 @@ async function genererAppreciation() {
         elements.result.value = "";
         setStatus(generationErrorMessage(error), true);
     } finally {
-        elements.generateSummary.disabled = false;
+        updateGenerationReadiness();
     }
 }
 
@@ -899,6 +948,10 @@ function bindEvents() {
     document.getElementById("timer-reset").addEventListener("click", zeroChrono);
 
     elements.apiForm.addEventListener("submit", (event) => event.preventDefault());
+
+    elements.apiKey.addEventListener("input", () => {
+        updateGenerationReadiness();
+    });
 
     elements.themeToggle.addEventListener("click", () => {
         state.darkMode = !state.darkMode;
@@ -939,15 +992,6 @@ function bindEvents() {
             target.closest(".grid-row").dataset.note = target.value || "Non noté";
             updateProgressIndicators();
         }
-
-        if (target.dataset.evalField === "score") {
-            const row = target.closest(".score-row");
-            const critere = pgeNotationCriteria[Number(target.dataset.evalIndex)];
-            const level = getNotationLevel(critere, target.value);
-            row.dataset.score = target.value ? "score-" + target.value : "score-empty";
-            row.querySelector(".score-description").textContent = level ? level.range + " - " + level.description : "Choisir une note pour afficher le repère.";
-            updateProgressIndicators();
-        }
         saveState();
     });
 
@@ -966,13 +1010,18 @@ function bindEvents() {
         }
     });
 
-    document.getElementById("clear-form").addEventListener("click", () => {
-        if (!hasEnteredData() || confirm("Effacer les saisies de ce candidat ?")) {
-            resetCandidateData();
-            saveState();
-            render();
-            setStatus("Saisies effacées.");
-        }
+    document.getElementById("clear-form").addEventListener("click", async () => {
+        const confirmed = !hasEnteredData() || await requestConfirmation({
+            title: "Effacer les saisies",
+            message: "Cette action effacera le candidat, les notes, les commentaires et la synthèse affichée.",
+            acceptLabel: "Tout effacer"
+        });
+        if (!confirmed) return;
+
+        resetCandidateData();
+        saveState();
+        render();
+        setStatus("Saisies effacées.");
     });
 
     elements.nextCandidate.addEventListener("click", startNextCandidate);
