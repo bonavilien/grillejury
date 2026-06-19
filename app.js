@@ -686,7 +686,6 @@ function renderEvaluation() {
                     ${criteresRevelateur.map((carte, index) => renderCriteriaRow(carte.nom, index, "rev", carte.img)).join("")}
                 </div>
             </section>
-            ${renderPgeNotation()}
         `;
     }
 
