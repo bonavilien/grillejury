@@ -824,6 +824,10 @@ function demarrerChrono() {
     if (!intervalChrono) intervalChrono = setInterval(affichageChrono, 1000);
 }
 
+function demarrerChronoAuPremierNom() {
+    if (temps === 0 && elements.candidateName.value.trim()) demarrerChrono();
+}
+
 function pauseChrono() {
     clearInterval(intervalChrono);
     intervalChrono = null;
@@ -1105,6 +1109,7 @@ function bindEvents() {
 
     elements.candidateName.addEventListener("input", () => {
         state.candidateName = elements.candidateName.value;
+        demarrerChronoAuPremierNom();
         saveState();
     });
 
