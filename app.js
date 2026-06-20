@@ -37,6 +37,10 @@ const models = [
     { label: "Gemini 3.5 Flash", value: "gemini-3.5-flash" }
 ];
 
+const GENERATION_MAX_ATTEMPTS = 3;
+const GENERATION_RETRY_DELAYS = [700, 1600];
+const GENERATION_TIMEOUT_MS = 30000;
+
 const criteresBase = [
     { group: "Parcours", label: "Académique (Prépa EC/BEL, lacunes ?)" },
     { group: "Parcours", label: "Expérience professionnelle (stage, travail d'été ?)" },
@@ -906,6 +910,75 @@ function extractGeneratedText(data) {
     return data?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
 }
 
+function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createGenerationError(message, { status = null, retryable = false } = {}) {
+    const error = new Error(message);
+    error.status = status;
+    error.retryable = retryable;
+    return error;
+}
+
+function isRetryableGenerationError(error) {
+    if (error.retryable) return true;
+
+    const status = error.status;
+    if ([408, 429, 500, 502, 503, 504].includes(status)) return true;
+
+    const lower = (error.message || "").toLowerCase();
+    return lower.includes("failed to fetch")
+        || lower.includes("network")
+        || lower.includes("timeout")
+        || lower.includes("aborted")
+        || lower.includes("overloaded")
+        || lower.includes("temporarily")
+        || lower.includes("unavailable")
+        || lower.includes("internal");
+}
+
+async function requestGeneration(apiKey, prompt) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.2 }
+            })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || data.error) {
+            throw createGenerationError(data.error?.message || `Erreur HTTP ${response.status}`, {
+                status: response.status,
+                retryable: [408, 429, 500, 502, 503, 504].includes(response.status)
+            });
+        }
+
+        const generatedText = extractGeneratedText(data);
+        if (!generatedText) {
+            throw createGenerationError("Aucun texte n'a été retourné par le modèle.", { retryable: true });
+        }
+
+        return generatedText;
+    } catch (error) {
+        if (error.name === "AbortError") {
+            throw createGenerationError("Délai de génération dépassé.", { retryable: true });
+        }
+        throw error;
+    } finally {
+        window.clearTimeout(timeout);
+    }
+}
+
 function generationErrorMessage(error) {
     const message = error.message || "Erreur inconnue";
     const lower = message.toLowerCase();
@@ -915,7 +988,7 @@ function generationErrorMessage(error) {
     }
 
     if (lower.includes("quota") || lower.includes("rate") || lower.includes("429")) {
-        return "Erreur de génération : quota ou limite temporaire atteint. Attends quelques instants, puis clique sur Réessayer.";
+        return "Erreur de génération : quota ou limite temporaire atteint après plusieurs tentatives. Les saisies sont conservées.";
     }
 
     if (lower.includes("model") || lower.includes("404")) {
@@ -923,7 +996,11 @@ function generationErrorMessage(error) {
     }
 
     if (lower.includes("network") || lower.includes("failed to fetch")) {
-        return "Erreur de génération : connexion impossible. Vérifie le réseau, puis clique sur Réessayer.";
+        return "Erreur de génération : connexion impossible après plusieurs tentatives. Les saisies sont conservées.";
+    }
+
+    if (lower.includes("délai") || lower.includes("timeout") || lower.includes("aborted")) {
+        return "Erreur de génération : délai dépassé après plusieurs tentatives. Les saisies sont conservées.";
     }
 
     return `Erreur de génération : ${message}. Corrige le problème, puis clique sur Réessayer.`;
@@ -939,7 +1016,9 @@ async function genererAppreciation() {
         return;
     }
 
+    const previousResult = state.result;
     state.modelName = elements.modelName.value;
+    const prompt = buildPrompt();
     state.result = "Analyse des critères et rédaction...";
     elements.result.value = state.result;
     renderStructuredResult(state.result);
@@ -947,19 +1026,19 @@ async function genererAppreciation() {
     setStatus("Génération en cours.");
 
     try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-        const response = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents: [{ parts: [{ text: buildPrompt() }] }] })
-        });
+        let generatedText = "";
+        for (let attempt = 1; attempt <= GENERATION_MAX_ATTEMPTS; attempt += 1) {
+            try {
+                generatedText = await requestGeneration(apiKey, prompt);
+                break;
+            } catch (error) {
+                const canRetry = attempt < GENERATION_MAX_ATTEMPTS && isRetryableGenerationError(error);
+                if (!canRetry) throw error;
 
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok || data.error) throw new Error(data.error?.message || `Erreur HTTP ${response.status}`);
-
-        const generatedText = extractGeneratedText(data);
-        if (!generatedText) throw new Error("Aucun texte n'a été retourné par le modèle.");
+                setStatus(`Génération interrompue, nouvelle tentative ${attempt + 1}/${GENERATION_MAX_ATTEMPTS}...`);
+                await wait(GENERATION_RETRY_DELAYS[attempt - 1] || GENERATION_RETRY_DELAYS.at(-1));
+            }
+        }
 
         state.result = generatedText;
         elements.result.value = generatedText;
@@ -967,9 +1046,9 @@ async function genererAppreciation() {
         setStatus("Synthèse créée.");
         saveState();
     } catch (error) {
-        state.result = "";
-        elements.result.value = "";
-        renderStructuredResult("");
+        state.result = previousResult;
+        elements.result.value = previousResult;
+        renderStructuredResult(previousResult);
         setStatus(generationErrorMessage(error), true);
     } finally {
         updateGenerationReadiness();
