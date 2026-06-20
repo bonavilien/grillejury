@@ -1,11 +1,4 @@
 const STORAGE_KEY = "jury-evaluation-2026";
-const NOTE_SHORTCUTS = {
-    "1": "Excellent",
-    "2": "Bien",
-    "3": "Moyen",
-    "4": "Insuffisant"
-};
-
 const programmes = {
     bachelor: {
         title: "Attendus - Bachelor",
@@ -634,31 +627,20 @@ function evaluationKey(type, index) {
 }
 
 function getEvaluation(type, index) {
-    return state.evaluations[evaluationKey(type, index)] || { note: "", score: "", comment: "" };
+    const saved = state.evaluations[evaluationKey(type, index)] || {};
+    return { comment: saved.comment || "" };
 }
 
 function renderCriteriaRow(sujet, index, type, imgSrc = null) {
     const saved = getEvaluation(type, index);
-    const selectId = `app-${type}-${index}`;
     const commentId = `com-${type}-${index}`;
     const imgHtml = imgSrc ? `<img src="${imgSrc}" class="card-icon" alt="" loading="lazy" onerror="this.hidden=true">` : "";
-    const noteState = saved.note || "Non noté";
 
     return `
-        <div class="grid-row" data-row-type="${type}" data-row-index="${index}" data-note="${escapeHtml(noteState)}">
+        <div class="grid-row" data-row-type="${type}" data-row-index="${index}">
             <div class="topic">${imgHtml}<span>${sujet}</span></div>
             <div class="field">
-                <label for="${selectId}">Note</label>
-                <select id="${selectId}" data-eval-type="${type}" data-eval-index="${index}" data-eval-field="note">
-                    <option value="">Non noté</option>
-                    <option value="Excellent" ${saved.note === "Excellent" ? "selected" : ""}>Excellent</option>
-                    <option value="Bien" ${saved.note === "Bien" ? "selected" : ""}>Bien</option>
-                    <option value="Moyen" ${saved.note === "Moyen" ? "selected" : ""}>Moyen</option>
-                    <option value="Insuffisant" ${saved.note === "Insuffisant" ? "selected" : ""}>Insuffisant</option>
-                </select>
-            </div>
-            <div class="field">
-                <label for="${commentId}">Commentaire</label>
+                <label for="${commentId}">Observation factuelle</label>
                 <input type="text" id="${commentId}" value="${escapeHtml(saved.comment)}" data-eval-type="${type}" data-eval-index="${index}" data-eval-field="comment" placeholder="Observation factuelle">
             </div>
         </div>
@@ -666,8 +648,8 @@ function renderCriteriaRow(sujet, index, type, imgSrc = null) {
 }
 
 function getProgress(criteria, type) {
-    const noted = criteria.filter((_, index) => getEvaluation(type, index).note).length;
-    return `${noted}/${criteria.length} notés`;
+    const completed = criteria.filter((_, index) => getEvaluation(type, index).comment.trim()).length;
+    return `${completed}/${criteria.length} observations`;
 }
 
 function updateProgressIndicators() {
@@ -711,10 +693,6 @@ function renderEvaluation() {
                 <h2 id="base-title">Critères généraux</h2>
                 <p class="shortcut-hint" id="base-progress">${getProgress(criteresBase, "base")}</p>
             </div>
-            <details class="shortcut-help">
-                <summary>Raccourcis clavier</summary>
-                <p>Alt+1 Excellent, Alt+2 Bien, Alt+3 Moyen, Alt+4 Insuffisant.</p>
-            </details>
             ${renderBaseGroups()}
         </section>
     `;
@@ -767,7 +745,7 @@ function hasEnteredData() {
         state.candidateName.trim() ||
         state.candidateOrigin.trim() ||
         state.result.trim() ||
-        Object.values(state.evaluations).some((item) => item.note || item.score || (item.comment || "").trim())
+        Object.values(state.evaluations).some((item) => (item.comment || "").trim())
     );
 }
 
@@ -782,7 +760,7 @@ function resetCandidateData() {
 async function startNextCandidate() {
     const confirmed = !hasEnteredData() || await requestConfirmation({
         title: "Nouveau candidat",
-        message: "Préparer un nouveau candidat effacera les notes, commentaires et la synthèse en cours.",
+        message: "Préparer un nouveau candidat effacera les observations et la synthèse en cours.",
         acceptLabel: "Préparer"
     });
     if (!confirmed) return;
@@ -800,7 +778,7 @@ async function switchProgramme(programme) {
     if (hasEnteredData()) {
         const confirmed = await requestConfirmation({
             title: "Changer de programme",
-            message: "Changer de programme effacera les notes, commentaires et la synthèse du candidat actuel.",
+            message: "Changer de programme effacera les observations et la synthèse du candidat actuel.",
             acceptLabel: "Changer"
         });
         if (!confirmed) return;
@@ -844,13 +822,13 @@ function collectEvaluations() {
 
     criteresBase.forEach((critere, index) => {
         const item = getEvaluation("base", index);
-        if (item.note || item.comment) lines.push("- " + critere.label + " : " + (item.note || "Non noté") + " / " + (item.comment || "Sans commentaire"));
+        if ((item.comment || "").trim()) lines.push("- " + critere.label + " : " + item.comment.trim());
     });
 
     if (programmes[state.programme].hasRevelateur) {
         criteresRevelateur.forEach((carte, index) => {
             const item = getEvaluation("rev", index);
-            if (item.note || item.comment) lines.push("- " + carte.nom + " : " + (item.note || "Non noté") + " / " + (item.comment || "Sans commentaire"));
+            if ((item.comment || "").trim()) lines.push("- " + carte.nom + " : " + item.comment.trim());
         });
 
     }
@@ -900,14 +878,15 @@ Consignes impératives :
 - Reste factuel, neutre et analytique. Ne fais pas de promesse de réussite future.
 - Interdiction absolue de faire la promotion de l'école.
 - Base-toi uniquement sur les informations saisies dans la grille et sur le contexte d'évaluation fourni.
+- Les observations saisies sont factuelles : ne déduis aucune appréciation à partir d'une note manuelle, car aucune note manuelle n'est fournie.
 ${buildRubricInstruction()}${buildGeneralOutputInstruction()}- N'invente pas d'éléments non renseignés. Si une dimension est absente, n'en parle pas.
-- Pour Bachelor et IBBA / EBP, si l'évaluation globale est très bonne, limite-toi à 2 lignes maximum.
-- Pour Bachelor et IBBA / EBP, si le candidat présente des notes insuffisantes ou moyennes, étends la synthèse jusqu'à 3 lignes maximum pour justifier ses lacunes de façon détaillée.
+- Pour Bachelor et IBBA / EBP, si les observations factuelles sont très positives, limite-toi à 2 lignes maximum.
+- Pour Bachelor et IBBA / EBP, si les observations factuelles signalent des réserves ou lacunes, étends la synthèse jusqu'à 3 lignes maximum pour les justifier de façon détaillée.
 Contexte du programme : ${buildProgrammePromptContext()}
 Nom : ${state.candidateName || "Non renseigné"}
 Origine : ${state.candidateOrigin || "Non renseignée"}
-Évaluations :
-${collectEvaluations() || "Aucune évaluation détaillée renseignée."}`;
+Observations factuelles :
+${collectEvaluations() || "Aucune observation factuelle renseignée."}`;
 }
 
 function extractGeneratedText(data) {
@@ -1066,20 +1045,6 @@ function focusNextComment(currentInput) {
     if (next) next.focus();
 }
 
-function applyNoteShortcut(target, key) {
-    const note = NOTE_SHORTCUTS[key];
-    if (!note) return false;
-
-    const row = target.closest(".grid-row");
-    const select = row?.querySelector('select[data-eval-field="note"]');
-    if (!select) return false;
-
-    select.value = note;
-    select.dispatchEvent(new Event("input", { bubbles: true }));
-    setStatus(`Note rapide appliquée : ${note}.`);
-    return true;
-}
-
 function bindEvents() {
     document.querySelectorAll("[data-programme]").forEach((tab) => {
         tab.addEventListener("click", () => switchProgramme(tab.dataset.programme));
@@ -1128,24 +1093,16 @@ function bindEvents() {
         if (!target.dataset.evalType) return;
 
         const key = evaluationKey(target.dataset.evalType, target.dataset.evalIndex);
-        const current = state.evaluations[key] || { note: "", comment: "" };
+        const current = getEvaluation(target.dataset.evalType, target.dataset.evalIndex);
         current[target.dataset.evalField] = target.value;
         state.evaluations[key] = current;
-        if (target.dataset.evalField === "note") {
-            target.closest(".grid-row").dataset.note = target.value || "Non noté";
-            updateProgressIndicators();
-        }
+        updateProgressIndicators();
         saveState();
     });
 
     elements.evaluation.addEventListener("keydown", (event) => {
         const target = event.target;
         if (!target.dataset.evalType) return;
-
-        if (event.altKey && applyNoteShortcut(target, event.key)) {
-            event.preventDefault();
-            return;
-        }
 
         if (event.key === "Enter" && target.dataset.evalField === "comment") {
             event.preventDefault();
@@ -1156,7 +1113,7 @@ function bindEvents() {
     document.getElementById("clear-form").addEventListener("click", async () => {
         const confirmed = !hasEnteredData() || await requestConfirmation({
             title: "Effacer les saisies",
-            message: "Cette action effacera le candidat, les notes, les commentaires et la synthèse affichée.",
+            message: "Cette action effacera le candidat, les observations et la synthèse affichée.",
             acceptLabel: "Tout effacer"
         });
         if (!confirmed) return;

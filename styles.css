@@ -304,23 +304,6 @@ input:focus, select:focus, textarea:focus {
     align-items: start;
 }
 
-.shortcut-help {
-    margin: -0.25rem 0 0.75rem;
-    color: var(--text-muted);
-    font-size: 0.84rem;
-}
-
-.shortcut-help summary {
-    width: fit-content;
-    cursor: pointer;
-    color: var(--primary-bg);
-    font-weight: 500;
-}
-
-.shortcut-help p {
-    margin: 0.35rem 0 0;
-}
-
 .criteria-group {
     display: grid;
     gap: 0.55rem;
@@ -343,7 +326,7 @@ input:focus, select:focus, textarea:focus {
 
 .grid-row {
     display: grid;
-    grid-template-columns: minmax(12rem, 1.5fr) minmax(8.5rem, 0.62fr) minmax(15rem, 2.1fr);
+    grid-template-columns: minmax(12rem, 0.95fr) minmax(16rem, 1.55fr);
     gap: 0.7rem;
     align-items: center;
     padding: 0.62rem;
@@ -357,26 +340,6 @@ input:focus, select:focus, textarea:focus {
 .grid-row:focus-within {
     border-color: var(--border-strong);
     box-shadow: var(--shadow-soft);
-}
-
-.grid-row[data-note="Excellent"] {
-    background: color-mix(in oklch, var(--success), var(--surface-raised) 90%);
-    border-color: color-mix(in oklch, var(--success), var(--border) 55%);
-}
-
-.grid-row[data-note="Bien"] {
-    background: color-mix(in oklch, var(--accent), var(--surface-raised) 91%);
-    border-color: color-mix(in oklch, var(--accent), var(--border) 62%);
-}
-
-.grid-row[data-note="Moyen"] {
-    background: color-mix(in oklch, var(--warning), var(--surface-raised) 88%);
-    border-color: color-mix(in oklch, var(--warning), var(--border) 55%);
-}
-
-.grid-row[data-note="Insuffisant"] {
-    background: color-mix(in oklch, var(--danger), var(--surface-raised) 91%);
-    border-color: color-mix(in oklch, var(--danger), var(--border) 54%);
 }
 
 .topic {
