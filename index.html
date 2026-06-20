@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Grille d'évaluation jury 2026</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23320013'/%3E%3Cpath d='M18 18h28v6H18zm0 12h28v6H18zm0 12h18v6H18z' fill='%23ff5968'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css?v=card-ratio-20260619">
+    <link rel="stylesheet" href="styles.css?v=structured-result-20260620">
 </head>
 <body>
     <a class="skip-link" href="#evaluation">Aller à l'évaluation</a>
@@ -103,8 +103,11 @@
                     </div>
                     <button class="btn-primary" type="button" id="generate-summary">Créer la synthèse</button>
                 </div>
-                <label class="sr-only" for="result">Appréciation finale</label>
-                <textarea id="result" placeholder="L'appréciation finale apparaîtra ici." readonly></textarea>
+                <label class="sr-only" for="result">Sortie brute générée</label>
+                <textarea id="result" hidden readonly></textarea>
+                <div class="result-output" id="result-output" aria-live="polite">
+                    <p class="result-empty">L'appréciation finale apparaîtra ici.</p>
+                </div>
                 <p class="status-message" id="status-message" role="status" aria-live="polite"></p>
                 <div class="actions">
                     <button class="btn-secondary" type="button" id="retry-summary" hidden>Réessayer</button>
@@ -128,6 +131,6 @@
         </form>
     </dialog>
 
-    <script src="app.js?v=card-ratio-20260619" defer></script>
+    <script src="app.js?v=structured-result-20260620" defer></script>
 </body>
 </html>

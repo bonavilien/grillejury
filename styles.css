@@ -557,6 +557,83 @@ input:focus, select:focus, textarea:focus {
     gap: 0.65rem;
 }
 
+.result-output {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.result-empty {
+    min-height: 11rem;
+    margin: 0;
+    display: grid;
+    place-items: center;
+    border: 1px dashed var(--border-strong);
+    border-radius: 0.5rem;
+    background: var(--surface-muted);
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.result-section {
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--surface-raised);
+    padding: 0.85rem;
+}
+
+.result-section h3,
+.score-output-item h4 {
+    margin: 0;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.result-section p,
+.score-output-item p {
+    margin: 0.4rem 0 0;
+    color: var(--text-muted);
+}
+
+.score-output-list {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 0.7rem;
+}
+
+.score-output-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: start;
+    padding: 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 0.45rem;
+    background: var(--surface);
+}
+
+.score-output-item strong,
+.result-global-score strong {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--surface-muted);
+    color: var(--text);
+    font-size: 0.86rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.result-global-score {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+}
+
 .status-message {
     min-height: 1.4rem;
     margin: 0.55rem 0 0;
@@ -591,6 +668,8 @@ input:focus, select:focus, textarea:focus {
     .header-actions > *, .actions > * { flex: 1; }
     .tabs { grid-template-columns: 1fr; }
     .grid-row, .score-row, .score-levels { grid-template-columns: 1fr; align-items: stretch; }
+    .score-output-item { grid-template-columns: 1fr; align-items: stretch; }
+    .result-global-score { flex-direction: column; align-items: stretch; }
     .score-row summary { grid-template-columns: 1fr auto; }
     .score-row summary small { grid-column: 1 / -1; padding-right: 0; }
     .result-card { position: static; }

@@ -411,6 +411,7 @@ function cacheElements() {
         candidateName: document.getElementById("candidate-name"),
         candidateOrigin: document.getElementById("candidate-origin"),
         result: document.getElementById("result"),
+        resultOutput: document.getElementById("result-output"),
         apiForm: document.getElementById("api-form"),
         apiKey: document.getElementById("api-key"),
         modelName: document.getElementById("model-name"),
@@ -519,6 +520,85 @@ function escapeHtml(value) {
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;");
+}
+
+function normaliseGeneratedJson(text) {
+    const trimmed = text.trim();
+    const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    return fenced ? fenced[1].trim() : trimmed;
+}
+
+function parseGeneratedResult(text) {
+    if (!text.trim()) return null;
+
+    try {
+        const parsed = JSON.parse(normaliseGeneratedJson(text));
+        if (parsed && typeof parsed === "object") return parsed;
+    } catch {
+        return null;
+    }
+
+    return null;
+}
+
+function renderFallbackResult(text) {
+    return `<article class="result-section">
+            <h3>Synthèse</h3>
+            <p>${escapeHtml(text).replaceAll("\n", "<br>")}</p>
+        </article>`;
+}
+
+function renderStructuredResult(text) {
+    if (!elements.resultOutput) return;
+
+    if (!text.trim()) {
+        elements.resultOutput.innerHTML = '<p class="result-empty">L\'appréciation finale apparaîtra ici.</p>';
+        return;
+    }
+
+    const parsed = parseGeneratedResult(text);
+    if (!parsed) {
+        elements.resultOutput.innerHTML = renderFallbackResult(text);
+        return;
+    }
+
+    const appreciation = parsed.appreciation || parsed["Appréciation"] || "";
+    const scores = Array.isArray(parsed.scores) ? parsed.scores : [];
+    const globalRange = parsed.globalRange || parsed.fourchetteGlobale || "";
+
+    let html = "";
+    if (appreciation) {
+        html += `<article class="result-section result-appreciation">
+                <h3>Appréciation générale</h3>
+                <p>${escapeHtml(appreciation)}</p>
+            </article>`;
+    }
+
+    if (scores.length) {
+        html += `<article class="result-section">
+                <h3>Notation PGE estimée</h3>
+                <div class="score-output-list">
+                    ${scores.map((score) => `
+                        <section class="score-output-item">
+                            <div>
+                                <h4>${escapeHtml(score.criterion || score.critere || "Critère")}</h4>
+                                <p>${escapeHtml(score.justification || "Justification non fournie.")}</p>
+                            </div>
+                            <strong>${escapeHtml(score.range || score.fourchette || "Non estimable")}</strong>
+                        </section>
+                    `).join("")}
+                </div>
+            </article>`;
+    }
+
+    if (globalRange) {
+        html += `<article class="result-section result-global-score">
+                <h3>Fourchette globale estimée PGE</h3>
+                <strong>${escapeHtml(globalRange)}</strong>
+            </article>`;
+    }
+
+    elements.resultOutput.innerHTML = html || renderFallbackResult(text);
 }
 
 function renderModelOptions() {
@@ -664,6 +744,7 @@ function renderFormValues() {
     elements.candidateName.value = state.candidateName;
     elements.candidateOrigin.value = state.candidateOrigin;
     elements.result.value = state.result;
+    renderStructuredResult(state.result);
 }
 
 function render() {
@@ -779,7 +860,7 @@ function buildPgeNotationContext() {
 
 function buildPgeCriterionOutputList() {
     return pgeNotationCriteria
-        .map((critere) => "- " + critere.label + " : [fourchette estimée]/10 - [justification courte fondée sur les commentaires]")
+        .map((critere) => '{ "criterion": "' + critere.label + '", "range": "[fourchette estimée]/10 ou non estimable", "justification": "[justification courte fondée sur les commentaires]" }')
         .join("\n");
 }
 
@@ -792,10 +873,16 @@ function buildProgrammePromptContext() {
 function buildRubricInstruction() {
     if (state.programme !== "pge") return "";
     return "- Pour le PGE, ne suppose pas que le jury a déjà complété la notation PGE : c'est toi qui dois estimer les fourchettes à partir des commentaires des Critères généraux et de l'Épreuve du révélateur, en t'appuyant sur la grille de notation PGE fournie.\n"
-        + "- Pour le PGE, rends obligatoirement deux blocs : d'abord \"Appréciation\" en 2 à 3 lignes, puis \"Notation PGE estimée\".\n"
-        + "- Dans \"Notation PGE estimée\", donne une ligne pour chacun des critères ci-dessous, exactement dans cet ordre. Chaque ligne doit contenir une fourchette /10 et une justification courte. Si les commentaires ne suffisent pas pour un critère, écris \"non estimable\" pour ce critère et explique brièvement pourquoi.\n"
+        + "- Pour le PGE, réponds uniquement en JSON valide, sans Markdown, sans bloc de code, sans texte avant ou après.\n"
+        + "- Le JSON doit suivre exactement cette forme : { \"appreciation\": \"2 à 3 lignes\", \"scores\": [ ... ], \"globalRange\": \"X-Y/10 ou non estimable\" }.\n"
+        + "- Dans scores, donne un objet pour chacun des critères ci-dessous, exactement dans cet ordre. Chaque objet doit contenir criterion, range et justification. Si les commentaires ne suffisent pas pour un critère, mets \"non estimable\" dans range et explique brièvement pourquoi dans justification.\n"
         + buildPgeCriterionOutputList() + "\n"
-        + "- Termine la notation PGE par \"Fourchette globale estimée PGE : X-Y/10\" ou \"Fourchette globale estimée PGE : non estimable\".\n";
+        + "- Ne regroupe pas les critères : chacun doit avoir sa propre fourchette et sa propre justification.\n";
+}
+
+function buildGeneralOutputInstruction() {
+    if (state.programme === "pge") return "";
+    return "- Réponds uniquement en JSON valide, sans Markdown, sans bloc de code, sous la forme { \"appreciation\": \"texte final\" }.\n";
 }
 
 function buildPrompt() {
@@ -805,7 +892,7 @@ Consignes impératives :
 - Reste factuel, neutre et analytique. Ne fais pas de promesse de réussite future.
 - Interdiction absolue de faire la promotion de l'école.
 - Base-toi uniquement sur les informations saisies dans la grille et sur le contexte d'évaluation fourni.
-${buildRubricInstruction()}- N'invente pas d'éléments non renseignés. Si une dimension est absente, n'en parle pas.
+${buildRubricInstruction()}${buildGeneralOutputInstruction()}- N'invente pas d'éléments non renseignés. Si une dimension est absente, n'en parle pas.
 - Pour Bachelor et IBBA / EBP, si l'évaluation globale est très bonne, limite-toi à 2 lignes maximum.
 - Pour Bachelor et IBBA / EBP, si le candidat présente des notes insuffisantes ou moyennes, étends la synthèse jusqu'à 3 lignes maximum pour justifier ses lacunes de façon détaillée.
 Contexte du programme : ${buildProgrammePromptContext()}
@@ -855,6 +942,7 @@ async function genererAppreciation() {
     state.modelName = elements.modelName.value;
     state.result = "Analyse des critères et rédaction...";
     elements.result.value = state.result;
+    renderStructuredResult(state.result);
     updateGenerationReadiness(true);
     setStatus("Génération en cours.");
 
@@ -875,11 +963,13 @@ async function genererAppreciation() {
 
         state.result = generatedText;
         elements.result.value = generatedText;
+        renderStructuredResult(generatedText);
         setStatus("Synthèse créée.");
         saveState();
     } catch (error) {
         state.result = "";
         elements.result.value = "";
+        renderStructuredResult("");
         setStatus(generationErrorMessage(error), true);
     } finally {
         updateGenerationReadiness();
