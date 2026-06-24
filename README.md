@@ -16,4 +16,4 @@ La clé API Google n'est pas stockée par l'application. Les notes et commentair
 
 ## Points d'attention
 
-Les identifiants de modèles Gemini peuvent évoluer. Mettre à jour le tableau `models` dans `app.js` si Google déprécie un modèle.
+La génération tente d'abord le modèle sélectionné, puis bascule automatiquement vers les autres modèles du tableau `models` dans `app.js` en cas de timeout, surcharge ou indisponibilité temporaire. Les identifiants Gemini évoluent : vérifier périodiquement la documentation Google et mettre à jour ce tableau si un modèle est déprécié.

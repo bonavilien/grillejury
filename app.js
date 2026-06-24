@@ -27,12 +27,16 @@ const programmes = {
 };
 
 const models = [
-    { label: "Gemini 3.5 Flash", value: "gemini-3.5-flash" }
+    { label: "Gemini 3.5 Flash - recommandé", value: "gemini-3.5-flash" },
+    { label: "Gemini 3.1 Flash-Lite - secours rapide", value: "gemini-3.1-flash-lite" },
+    { label: "Gemini 2.5 Flash - compatibilité", value: "gemini-2.5-flash" },
+    { label: "Gemini 2.5 Flash-Lite - secours économique", value: "gemini-2.5-flash-lite" },
+    { label: "Gemini 2.5 Pro - secours qualité", value: "gemini-2.5-pro" }
 ];
 
-const GENERATION_MAX_ATTEMPTS = 3;
-const GENERATION_RETRY_DELAYS = [700, 1600];
-const GENERATION_TIMEOUT_MS = 30000;
+const GENERATION_MAX_ATTEMPTS_PER_MODEL = 2;
+const GENERATION_RETRY_DELAYS = [700];
+const GENERATION_TIMEOUT_MS = 22000;
 
 const criteresBase = [
     { group: "Parcours", label: "Académique (Prépa EC/BEL, lacunes ?)" },
@@ -897,18 +901,34 @@ function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createGenerationError(message, { status = null, retryable = false } = {}) {
+function createGenerationError(message, { status = null, retryable = false, modelName = "" } = {}) {
     const error = new Error(message);
     error.status = status;
     error.retryable = retryable;
+    error.modelName = modelName;
     return error;
 }
 
+function getGenerationModelQueue(preferredModelName) {
+    const preferred = models.find((model) => model.value === preferredModelName) || models[0];
+    return [preferred, ...models.filter((model) => model.value !== preferred.value)];
+}
+
+function isAuthGenerationError(error) {
+    const lower = (error.message || "").toLowerCase();
+    return [400, 401, 403].includes(error.status)
+        || lower.includes("api key")
+        || lower.includes("permission")
+        || lower.includes("unauthorized")
+        || lower.includes("forbidden");
+}
+
 function isRetryableGenerationError(error) {
+    if (isAuthGenerationError(error)) return false;
     if (error.retryable) return true;
 
     const status = error.status;
-    if ([408, 429, 500, 502, 503, 504].includes(status)) return true;
+    if ([404, 408, 429, 500, 502, 503, 504].includes(status)) return true;
 
     const lower = (error.message || "").toLowerCase();
     return lower.includes("failed to fetch")
@@ -918,13 +938,16 @@ function isRetryableGenerationError(error) {
         || lower.includes("overloaded")
         || lower.includes("temporarily")
         || lower.includes("unavailable")
-        || lower.includes("internal");
+        || lower.includes("internal")
+        || lower.includes("model")
+        || lower.includes("not found")
+        || lower.includes("deprecated");
 }
 
-async function requestGeneration(apiKey, prompt) {
+async function requestGeneration(apiKey, prompt, modelName) {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     try {
         const response = await fetch(url, {
@@ -942,24 +965,62 @@ async function requestGeneration(apiKey, prompt) {
         if (!response.ok || data.error) {
             throw createGenerationError(data.error?.message || `Erreur HTTP ${response.status}`, {
                 status: response.status,
+                modelName,
                 retryable: [408, 429, 500, 502, 503, 504].includes(response.status)
             });
         }
 
         const generatedText = extractGeneratedText(data);
         if (!generatedText) {
-            throw createGenerationError("Aucun texte n'a été retourné par le modèle.", { retryable: true });
+            throw createGenerationError("Aucun texte n'a été retourné par le modèle.", { retryable: true, modelName });
         }
 
         return generatedText;
     } catch (error) {
         if (error.name === "AbortError") {
-            throw createGenerationError("Délai de génération dépassé.", { retryable: true });
+            throw createGenerationError("Délai de génération dépassé.", { retryable: true, modelName });
         }
+        if (!error.modelName) error.modelName = modelName;
         throw error;
     } finally {
         window.clearTimeout(timeout);
     }
+}
+
+async function requestGenerationWithFallback(apiKey, prompt, preferredModelName) {
+    const queue = getGenerationModelQueue(preferredModelName);
+    let lastError = null;
+
+    for (const [modelIndex, model] of queue.entries()) {
+        for (let attempt = 1; attempt <= GENERATION_MAX_ATTEMPTS_PER_MODEL; attempt += 1) {
+            const suffix = queue.length > 1 ? ` - modèle ${modelIndex + 1}/${queue.length}` : "";
+            setStatus(`Génération via ${model.label}${suffix}, tentative ${attempt}/${GENERATION_MAX_ATTEMPTS_PER_MODEL}...`);
+
+            try {
+                const text = await requestGeneration(apiKey, prompt, model.value);
+                return { text, model };
+            } catch (error) {
+                lastError = error;
+                if (isAuthGenerationError(error)) throw error;
+
+                const canRetrySameModel = attempt < GENERATION_MAX_ATTEMPTS_PER_MODEL && isRetryableGenerationError(error);
+                if (canRetrySameModel) {
+                    setStatus(`${model.label} ne répond pas, nouvelle tentative...`);
+                    await wait(GENERATION_RETRY_DELAYS[attempt - 1] || GENERATION_RETRY_DELAYS.at(-1));
+                    continue;
+                }
+
+                if (modelIndex < queue.length - 1 && isRetryableGenerationError(error)) {
+                    setStatus(`${model.label} indisponible, bascule vers ${queue[modelIndex + 1].label}...`);
+                    break;
+                }
+
+                throw error;
+            }
+        }
+    }
+
+    throw lastError || createGenerationError("Aucun modèle disponible.", { retryable: true });
 }
 
 function generationErrorMessage(error) {
@@ -1009,24 +1070,13 @@ async function genererAppreciation() {
     setStatus("Génération en cours.");
 
     try {
-        let generatedText = "";
-        for (let attempt = 1; attempt <= GENERATION_MAX_ATTEMPTS; attempt += 1) {
-            try {
-                generatedText = await requestGeneration(apiKey, prompt);
-                break;
-            } catch (error) {
-                const canRetry = attempt < GENERATION_MAX_ATTEMPTS && isRetryableGenerationError(error);
-                if (!canRetry) throw error;
-
-                setStatus(`Génération interrompue, nouvelle tentative ${attempt + 1}/${GENERATION_MAX_ATTEMPTS}...`);
-                await wait(GENERATION_RETRY_DELAYS[attempt - 1] || GENERATION_RETRY_DELAYS.at(-1));
-            }
-        }
-
-        state.result = generatedText;
-        elements.result.value = generatedText;
-        renderStructuredResult(generatedText);
-        setStatus("Synthèse créée.");
+        const generation = await requestGenerationWithFallback(apiKey, prompt, state.modelName);
+        state.modelName = generation.model.value;
+        elements.modelName.value = generation.model.value;
+        state.result = generation.text;
+        elements.result.value = generation.text;
+        renderStructuredResult(generation.text);
+        setStatus(`Synthèse créée avec ${generation.model.label}.`);
         saveState();
     } catch (error) {
         state.result = previousResult;
